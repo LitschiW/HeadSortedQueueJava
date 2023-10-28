@@ -4,7 +4,7 @@ import java.util.*;
 
 public class HeadSortedQueue<T extends Bucketable> extends AbstractQueue<T> {
 
-    private final Comparator<Bucketable> bucketComparator = Comparator.comparingDouble(Bucketable::getPriority);
+    private final Comparator<Bucketable> bucketComparator = Comparator.comparingDouble(Bucketable::priority);
 
     private final double bucketSize;
     private double headUpperBound;
@@ -62,7 +62,7 @@ public class HeadSortedQueue<T extends Bucketable> extends AbstractQueue<T> {
 
     @Override
     public boolean offer(T t) {
-        double priority = t.getPriority();
+        double priority = t.priority();
         if (priority < headUpperBound) {
             return headQueue.offer(t);
         } else {
