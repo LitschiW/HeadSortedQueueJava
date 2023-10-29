@@ -11,7 +11,9 @@ public class HeadSortedQueue<T extends Bucketable> extends AbstractQueue<T> {
 
     private final PriorityQueue<T> headQueue = new PriorityQueue<>(bucketComparator);
 
-    private final TreeMap<Integer, ArrayList<T>> tailMap = new TreeMap<>();
+    private final TreeMap<Integer, HashSet<T>> tailMap = new TreeMap<>();
+
+    private int size = 0;
 
     public HeadSortedQueue(double bucketSize) {
         this.bucketSize = bucketSize;
@@ -29,7 +31,7 @@ public class HeadSortedQueue<T extends Bucketable> extends AbstractQueue<T> {
 
     @Override
     public int size() {
-        return headQueue.size() + tailMap.values().stream().mapToInt(List::size).sum();
+        return size;
     }
 
 
@@ -40,36 +42,48 @@ public class HeadSortedQueue<T extends Bucketable> extends AbstractQueue<T> {
 
     @Override
     public T poll() {
+        if (size == 0) {
+            return null;
+        }
+
         T polled = headQueue.poll();
 
         if (headQueue.isEmpty() || polled == null) {
             //if the head queue was empty or we pulled the last element, we need to refill the head queue with the next bucket
-            Map.Entry<Integer, ArrayList<T>> entry = tailMap.firstEntry();
+            Map.Entry<Integer, HashSet<T>> entry = tailMap.pollFirstEntry();
             if (entry != null) {
-                tailMap.remove(entry.getKey());
                 headQueue.addAll(entry.getValue());
                 headUpperBound = entry.getKey() * bucketSize;
             }
+        }
 
-            //if the head queue was empty we poll the next element, also triggering an empty check again
-            if (polled == null) {
-                polled = poll();
-            }
+        if (polled != null) {
+            size--;
         }
 
         return polled;
     }
 
     @Override
-    public boolean offer(T t) {
-        double priority = t.priority();
+    public boolean offer(T element) {
+        Objects.requireNonNull(element);
+
+        double priority = element.priority();
+        boolean added;
+
         if (priority < headUpperBound) {
-            return headQueue.offer(t);
+            added = headQueue.offer(element);
         } else {
-            int bucket = (int) (priority / bucketSize);
-            ArrayList<T> bucketList = tailMap.computeIfAbsent(bucket, k -> new ArrayList<>());
-            return bucketList.add(t);
+            int bucket_id = (int) (priority / bucketSize);
+            Collection<T> bucket = tailMap.computeIfAbsent(bucket_id, k -> new HashSet<>());
+            added = bucket.add(element);
         }
+
+        if (added) {
+            size++;
+        }
+
+        return added;
     }
 
     public List<T> toList() {
@@ -84,5 +98,23 @@ public class HeadSortedQueue<T extends Bucketable> extends AbstractQueue<T> {
         return acc;
     }
 
+    @Override
+    public boolean add(T element) {
+        return this.offer(element);
+    }
 
+    @Override
+    public boolean contains(Object o) {
+        if (o == null) {
+            return false;
+        }
+
+        for (T t : this) {
+            if (o.equals(t)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
 }
