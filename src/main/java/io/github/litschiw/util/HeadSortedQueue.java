@@ -16,13 +16,38 @@ public class HeadSortedQueue<T extends Bucketable> extends AbstractQueue<T> {
     private int size = 0;
 
     public HeadSortedQueue(double bucketSize) {
+        this(bucketSize, 0); // assuming positive values by default
+    }
+
+    public HeadSortedQueue(double bucketSize, Collection<T> elements) {
+        this(bucketSize);
+        this.addAll(elements);
+    }
+
+    public HeadSortedQueue(double bucketSize, double expectedRangeStart) {
         this.bucketSize = bucketSize;
-        this.headUpperBound = bucketSize;
+        this.headUpperBound = expectedRangeStart + bucketSize; // assuming positive values by default
+    }
+
+    public HeadSortedQueue(double bucketSize, double expectedRangeStart, int preAllocatedBuckets) {
+        this(bucketSize, expectedRangeStart);
+
+        //pre fill the tail map with empty buckets
+        //expectedRangeStart + bucketSize is the upper border of the head queue, so we step one further
+        double currentIdicator = expectedRangeStart + 2 * bucketSize;
+        for (int i = 0; i < preAllocatedBuckets; i++) {
+            tailMap.putIfAbsent(getBucketId(currentIdicator), new HashSet<>());
+            currentIdicator += bucketSize;
+        }
     }
 
 
     @Override
     public Iterator<T> iterator() {
+        if (size() == 0) {
+            return Collections.emptyIterator();
+        }
+
         PriorityQueue<T> acc = new PriorityQueue<>(size(), bucketComparator);
         acc.addAll(headQueue);
         tailMap.values().forEach(acc::addAll);
@@ -74,7 +99,7 @@ public class HeadSortedQueue<T extends Bucketable> extends AbstractQueue<T> {
         if (priority < headUpperBound) {
             added = headQueue.offer(element);
         } else {
-            int bucket_id = (int) (priority / bucketSize);
+            int bucket_id = getBucketId(priority);
             Collection<T> bucket = tailMap.computeIfAbsent(bucket_id, k -> new HashSet<>());
             added = bucket.add(element);
         }
@@ -86,16 +111,55 @@ public class HeadSortedQueue<T extends Bucketable> extends AbstractQueue<T> {
         return added;
     }
 
-    public List<T> toList() {
-        List<T> acc = new ArrayList<>(size());
-        acc.addAll(this);
-        return acc;
+
+    @Override
+    public boolean remove(Object element) {
+        if (!(element instanceof Bucketable bucketable)) {
+            return false;
+        }
+
+        double priority = bucketable.priority();
+        boolean removed = false;
+
+        if (priority < headUpperBound) {
+            removed = headQueue.remove(bucketable);
+        } else {
+            int bucket_id = getBucketId(priority);
+            Collection<T> bucket = tailMap.get(bucket_id);
+            if (bucket != null) {
+                removed = bucket.remove(bucketable);
+            }
+        }
+
+        if (removed) {
+            size--;
+        }
+        return removed;
     }
 
-    public Set<T> toSet() {
-        Set<T> acc = new HashSet<>(size());
-        acc.addAll(this);
-        return acc;
+    @Override
+    public boolean removeAll(Collection<?> c) {
+        Objects.requireNonNull(c);
+
+        boolean changed = false;
+        for (Object o : c) {
+            changed |= this.remove(o);
+        }
+        return changed;
+    }
+
+
+    @Override
+    public boolean retainAll(Collection<?> c) {
+        Objects.requireNonNull(c);
+
+        boolean changed = false;
+        for (T element : this) {
+            if (!c.contains(element)) {
+                changed |= this.remove(element);
+            }
+        }
+        return changed;
     }
 
     @Override
@@ -105,16 +169,24 @@ public class HeadSortedQueue<T extends Bucketable> extends AbstractQueue<T> {
 
     @Override
     public boolean contains(Object o) {
-        if (o == null) {
+        if (!(o instanceof Bucketable bucketable)) {
             return false;
         }
 
-        for (T t : this) {
-            if (o.equals(t)) {
-                return true;
-            }
-        }
+        double priority = bucketable.priority();
 
-        return false;
+        if (priority < headUpperBound) {
+            return headQueue.contains(o);
+        } else {
+            int bucket_id = getBucketId(priority);
+            Collection<T> bucket = tailMap.get(bucket_id);
+            return bucket != null && bucket.contains(o);
+        }
     }
+
+    private int getBucketId(double indicator) {
+        return (int) (indicator / bucketSize);
+    }
+
+
 }
