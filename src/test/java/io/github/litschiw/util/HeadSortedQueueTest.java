@@ -11,19 +11,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class HeadSortedQueueTest {
 
-    record TestElement(double priority) implements Bucketable, Comparable<TestElement> {
-
-        @Override
-        public int compareTo(TestElement o) {
-            return Double.compare(priority, o.priority);
-        }
-
-        @Override
-        public String toString() {
-            return String.valueOf(priority);
-        }
-    }
-
 
     enum Operation {
         ADD, POLL, CONTAINS, PEEK, REMOVE;
